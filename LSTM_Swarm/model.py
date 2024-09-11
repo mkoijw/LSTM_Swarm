@@ -100,7 +100,7 @@ def train(args, dtr, val, path):
 def get_mape(x, y):
     return np.mean(np.abs((x - y) / x))
 
-def test(args, dte, path, m, n):
+def test(args, dte, path, m, n, dte_wl):
     pred = []
     y = []
     print('loading models...')
@@ -126,6 +126,7 @@ def test(args, dte, path, m, n):
 
     pred = convert_tensor_list_to_numpy(pred)
     y = np.array([tensor.numpy() for tensor in y])
+    dte_wl = np.array(dte_wl)
     for i in range(3):
         y[:, i] = y[:, i] * (m[i + 3] - n[i + 3]) + n[i + 3]
         pred[:, i] = pred[:, i] * (m[i+3] - n[i+3]) + n[i+3]
@@ -141,6 +142,7 @@ def test(args, dte, path, m, n):
     for i in range(3):
         axes[i].plot(y[:, i], label='label', color='blue')
         axes[i].plot(pred[:, i], label='predict', color='orange')
+        axes[i].plot(dte_wl[:, i], label='wmm2020', color='yellow')
         axes[i].set_title(titles[i])
         axes[i].set_xlabel('time')
         axes[i].set_ylabel('nT')

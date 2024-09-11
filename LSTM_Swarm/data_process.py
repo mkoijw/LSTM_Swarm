@@ -34,10 +34,12 @@ def nn_seq_us(args,b,file_name):
     def process(data, batch_size):
         # 提取 0 到 6 列数据
         load = data.iloc[:, 0:6].values  # 使用 .values 直接获取 NumPy 数组
+        wmm_load = data.iloc[:, 6:9].values
         load = (load - n) / (m - n)  # 正规化
 
         # 初始化序列列表
         seq = []
+        wmm_label = []
 
         # 计算数据集大小和批次数
         seq_len = 3600*3
@@ -48,20 +50,25 @@ def nn_seq_us(args,b,file_name):
             # 构造 3600 步长的输入序列和对应的标签
             train_seq = load[i:i + seq_len, 0:3]
             train_label = load[i + seq_len, 3:6]
+            train_wmm2020_label = wmm_load[i + seq_len, 0:3]
 
             # 将 NumPy 数组转换为 PyTorch 张量
             train_seq = torch.FloatTensor(train_seq)
             train_label = torch.FloatTensor(train_label)
 
             seq.append((train_seq, train_label))
+            wmm_label.append(train_wmm2020_label)
+
 
         # 构建 DataLoader 对象
         seq = MyDataset(seq)
         seq = DataLoader(dataset=seq, batch_size=batch_size, shuffle=False, num_workers=0, drop_last=True)
-        return seq
+        # wmm_label = MyDataset(wmm_label)
+        # wmm_label = DataLoader(dataset=wmm_label, batch_size=batch_size, shuffle=False, num_workers=0, drop_last=True)
+        return seq, wmm_label
 
-    dtr = process(train, b)
-    val = process(val, b)
-    dte = process(test,b)
+    dtr, dtr_wl = process(train, b)
+    val, val_wl = process(val, b)
+    dte, dte_wl = process(test,b)
     print("代码块 A 耗时: {:.2f}秒".format(time.time() - start_time))
-    return dtr, val, dte, m, n
+    return dtr, val, dte, m, n, dte_wl
