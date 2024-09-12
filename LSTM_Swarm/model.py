@@ -128,12 +128,19 @@ def test(args, dte, path, m, n, dte_wl):
     y = np.array([tensor.numpy() for tensor in y])
     dte_wl = np.array(dte_wl)
     for i in range(3):
-        y[:, i] = y[:, i] * (m[i + 3] - n[i + 3]) + n[i + 3]
-        pred[:, i] = pred[:, i] * (m[i+3] - n[i+3]) + n[i+3]
-    std_error = np.std(y-pred, axis=0)
-    print("标准差为:", std_error)
+        y[:, i] = y[:, i] * (m[i + 9] - n[i + 9]) + n[i + 9]
+        pred[:, i] = pred[:, i] * (m[i+9] - n[i+9]) + n[i+9]
+
+    std_wmm_error = np.std(y, axis=0)
+    std_error = np.std(pred, axis=0)
+    print("预测误差标准差为:", std_error)
+    print("模型误差标准差为:", std_wmm_error)
+    # y = y + dte_wl[0:len(y),:]
+    # pred = pred + dte_wl[0:len(y),:]
+
     # y, pred = np.array(y), np.array(pred)
     # 创建子图：每列数据一个图
+    plt.figure()
     fig, axes = plt.subplots(3, 1, figsize=(10, 15))
 
     # 每个子图的标题
@@ -142,7 +149,7 @@ def test(args, dte, path, m, n, dte_wl):
     for i in range(3):
         axes[i].plot(y[:, i], label='label', color='blue')
         axes[i].plot(pred[:, i], label='predict', color='orange')
-        axes[i].plot(dte_wl[:, i], label='wmm2020', color='yellow')
+        # axes[i].plot(dte_wl[:, i], label='wmm2020', color='yellow')
         axes[i].set_title(titles[i])
         axes[i].set_xlabel('time')
         axes[i].set_ylabel('nT')

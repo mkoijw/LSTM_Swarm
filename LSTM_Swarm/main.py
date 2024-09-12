@@ -10,5 +10,5 @@ file_name = 'train20240825.csv'
 LSTM_PATH = path + '/LSTM_Swarm/model/train20240825.pkl'
 
 dtr, val, dte, m, n, dte_wl = nn_seq_us(args,args.batch_size,file_name)
-# train(args, dtr, val, LSTM_PATH)
+train(args, dtr, val, LSTM_PATH)
 test(args, dte, LSTM_PATH, m, n, dte_wl)

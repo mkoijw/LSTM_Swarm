@@ -28,12 +28,12 @@ def nn_seq_us(args,b,file_name):
     val = dataset[int(len(dataset) * 0.6):int(len(dataset) * 0.8)]
     test = dataset[int(len(dataset) * 0.8):len(dataset)]
 
-    m = train.iloc[:, 0:6].max(axis=0).values  # 每列的最大值
-    n = train.iloc[:, 0:6].min(axis=0).values  # 每列的最小值
+    m = train.iloc[:, 0:12].max(axis=0).values  # 每列的最大值
+    n = train.iloc[:, 0:12].min(axis=0).values  # 每列的最小值
 
     def process(data, batch_size):
         # 提取 0 到 6 列数据
-        load = data.iloc[:, 0:6].values  # 使用 .values 直接获取 NumPy 数组
+        load = data.iloc[:, 0:12].values  # 使用 .values 直接获取 NumPy 数组
         wmm_load = data.iloc[:, 6:9].values
         load = (load - n) / (m - n)  # 正规化
 
@@ -42,14 +42,14 @@ def nn_seq_us(args,b,file_name):
         wmm_label = []
 
         # 计算数据集大小和批次数
-        seq_len = 3600*3
+        seq_len = 3600*1
         step = 30
 
         # 通过步长创建训练序列和标签
         for i in range(0, len(data) - seq_len, step):
             # 构造 3600 步长的输入序列和对应的标签
             train_seq = load[i:i + seq_len, 0:3]
-            train_label = load[i + seq_len, 3:6]
+            train_label = load[i + seq_len, 9:12]
             train_wmm2020_label = wmm_load[i + seq_len, 0:3]
 
             # 将 NumPy 数组转换为 PyTorch 张量
