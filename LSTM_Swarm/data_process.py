@@ -12,21 +12,20 @@ def load_data(file_name):
 class MyDataset(Dataset):
     def __init__(self, data):
         self.data = data
-
     def __getitem__(self, item):
         return self.data[item]
-
     def __len__(self):
         return len(self.data)
 
-def nn_seq_us(args,b,file_name):
+def nn_seq_us(args, b, train_file_name, test_file_name):
     start_time = time.time()
     print('data processing...')
-    dataset = load_data(file_name)
+    train_dataset = load_data(train_file_name)
+    test_dataset = load_data(test_file_name)
     # split
-    train = dataset[:int(len(dataset) * 0.6)]
-    val = dataset[int(len(dataset) * 0.6):int(len(dataset) * 0.8)]
-    test = dataset[int(len(dataset) * 0.8):len(dataset)]
+    train = train_dataset[:int(len(train_dataset) * 0.8)]
+    val = train_dataset[int(len(train_dataset) * 0.8):len(train_dataset)]
+    test = test_dataset[int(len(test_dataset) * 0.8):len(test_dataset)]
 
     m = train.iloc[:, 0:12].max(axis=0).values  # 每列的最大值
     n = train.iloc[:, 0:12].min(axis=0).values  # 每列的最小值
@@ -42,7 +41,7 @@ def nn_seq_us(args,b,file_name):
         wmm_label = []
 
         # 计算数据集大小和批次数
-        seq_len = 3600*1
+        seq_len = 60
         step = 30
 
         # 通过步长创建训练序列和标签
@@ -70,5 +69,5 @@ def nn_seq_us(args,b,file_name):
     dtr, dtr_wl = process(train, b)
     val, val_wl = process(val, b)
     dte, dte_wl = process(test,b)
-    print("代码块 A 耗时: {:.2f}秒".format(time.time() - start_time))
+    print("数据处理耗时: {:.2f}秒".format(time.time() - start_time))
     return dtr, val, dte, m, n, dte_wl
