@@ -12,7 +12,6 @@ test_file_name = 'test20240827.csv'
 LSTM_PATH = path + '/LSTM_Swarm/model/train20240825_20240826.pkl'
 
 dtr, val, dte, m, n, dte_wl = nn_seq_us(args, args.batch_size, train_file_name, test_file_name)
-
 start_time = time.time()
 # train(args, dtr, val, LSTM_PATH)
 print("训练耗时: {:.2f}秒".format(time.time() - start_time))
