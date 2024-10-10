@@ -5,6 +5,7 @@ from tqdm import tqdm
 import copy
 import numpy as np
 import torch.onnx
+import time
 from itertools import chain
 from scipy.interpolate import make_interp_spline
 import matplotlib.pyplot as plt
@@ -71,6 +72,7 @@ def train(args, dtr, val, path):
     else:
         optimizer = torch.optim.RMSprop(model.parameters(), lr)
     scheduler = StepLR(optimizer, step_size, gamma)
+
     # training
     min_epochs = 10
     best_model = None
@@ -95,8 +97,10 @@ def train(args, dtr, val, path):
             min_val_loss = val_loss
             best_model = copy.deepcopy(model)
         train_loss_list.append(np.mean(train_loss))
+
         print('epoch {:03d} train_loss {:.8f} val_loss {:.8f}'.format(epoch, np.mean(train_loss), val_loss))
         model.train()
+
     state = {'models': best_model.state_dict()}
     torch.save(state, path)
 
@@ -117,7 +121,7 @@ def train(args, dtr, val, path):
 def get_mape(x, y):
     return np.mean(np.abs((x - y) / x))
 
-def test(args, dte, path, m, n, dte_wl):
+def test(args, dte, path, m, n):
     pred = []
     y = []
     print('loading models...')
@@ -132,6 +136,7 @@ def test(args, dte, path, m, n, dte_wl):
     loss_function = nn.MSELoss().to(device)
     test_loss = []
     for (seq, target) in tqdm(dte):
+        # tempseq = seq[0]
         y.extend(target)
         seq = seq.to(device)
         target = target.to(device)
@@ -148,10 +153,9 @@ def test(args, dte, path, m, n, dte_wl):
 
     pred = convert_tensor_list_to_numpy(pred)
     y = convert_tensor_list_to_numpy(y)
-    dte_wl = np.array(dte_wl)
     for i in range(3):
-        y[:, i] = y[:, i] * (m[i + 9] - n[i + 9]) + n[i + 9]
-        pred[:, i] = pred[:, i] * (m[i+9] - n[i+9]) + n[i+9]
+        y[:, i] = y[:, i] * (m[i + 13] - n[i + 13]) + n[i + 13]
+        pred[:, i] = pred[:, i] * (m[i + 13] - n[i + 13]) + n[i + 13]
 
     std_wmm_error = np.std(y, axis=0)
     std_error = np.std(pred, axis=0)
@@ -175,6 +179,20 @@ def test(args, dte, path, m, n, dte_wl):
         axes[i].set_title(titles[i])
         axes[i].set_xlabel('time')
         axes[i].set_ylabel('nT')
+        axes[i].legend()
+
+    detaR = y - pred
+    Rd = np.sqrt(np.sum(detaR ** 2, axis=1))
+    plt.figure()
+    plt.plot(Rd)
+
+    fig, axes = plt.subplots(3, 1, figsize=(10, 15))
+    titles = ['Ex', 'Ey', 'Ez']
+    for i in range(3):
+        axes[i].plot(y[:, i]-pred[:, i], label='label', color='blue')
+        axes[i].set_title(titles[i])
+        axes[i].set_xlabel('time')
+        axes[i].set_ylabel('km')
         axes[i].legend()
 
     # 调整布局以使子图之间的间距更合适

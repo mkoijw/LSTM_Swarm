@@ -46,6 +46,20 @@ def JD2000(JEAR, MONTH, KDAY, JHR, MI, SEC):
 
     return DAY
 
+def JD2000_(JEAR, MONTH, KDAY, SEC):
+    # 计算 JJ
+    JJ = math.floor((14 - MONTH) / 12)
+
+    # 计算 L
+    L = JEAR - JJ - 1900 * math.floor(JEAR / 1900) + 100 * math.floor(2000 / (JEAR + 1951))
+
+    # 计算 DAY
+    DAY = KDAY - 36496 + math.floor((1461 * L) / 4) + math.floor((367 * (MONTH - 2 + JJ * 12)) / 12)
+
+    # 加上时间部分
+    DAY += SEC / 86400 - 0.5
+
+    return DAY
 
 
 def simit_l(sita, Nmax):

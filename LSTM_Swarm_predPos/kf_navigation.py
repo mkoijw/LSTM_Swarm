@@ -1,34 +1,52 @@
 import numpy as np
-from scipy.integrate import ode
 import time
-from navigation_plugin import orbit_dynamics_j2, JD2000, ecf2sphere_mag, H1Mag2Sph, H2SpheTver
+import torch
+from scipy.integrate import ode
+from navigation_plugin import orbit_dynamics_j2, JD2000, ecf2sphere_mag, H1Mag2Sph, H2SpheTver, JD2000_
+from predPosB2error import predPosB2error
 # import onnxruntime as ort
 import matplotlib.pyplot as plt
+import pandas as pd
+
 # 开始计时
 start_time = time.time()
 
 # 计算地球磁场模型WMM2020的高斯球谐系数g,h
+year = 2024
+month = 9
+day = 5
 DAY_t0 = JD2000(2020, 1, 1, 0, 0, 0)
-DAY_t = JD2000(2024, 8, 25, 0, 0, 0)
+DAY_t = JD2000(2024, 9, 5, 0, 0, 0)
 DAY_decimal = (DAY_t - DAY_t0) / 365
+
+#读训练文件
+def load_data(file_name):
+    df = pd.read_csv('data/' + file_name, encoding='gbk')
+    df.fillna(df.mean(), inplace=True)#将NAN替换成每列均值
+    return df
+test_dataset = load_data('predPosTrain20240905.csv')
+test_load = test_dataset.iloc[:, :].values
+label = test_load[:,13:16]
 
 # 读取WMM2020文件中的高斯球谐系数
 data = np.loadtxt('WMM2020.txt')
-n, m, gvali, hvali, gsvi, hsvi = data.T
+wmm_n, wmm_m, gvali, hvali, gsvi, hsvi = data.T
 g = np.zeros((12, 13))
 h = np.zeros((12, 13))
-for i in range(len(n)):
-    g[int(n[i])-1, int(m[i])] = gvali[i] + gsvi[i] * DAY_decimal
-    h[int(n[i])-1, int(m[i])] = hvali[i] + hsvi[i] * DAY_decimal
+for i in range(len(wmm_n)):
+    g[int(wmm_n[i])-1, int(wmm_m[i])] = gvali[i] + gsvi[i] * DAY_decimal
+    h[int(wmm_n[i])-1, int(wmm_m[i])] = hvali[i] + hsvi[i] * DAY_decimal
 
 # 读取swarm卫星轨道数据
-swarm_data = np.loadtxt('swarm_20240825.txt')
+swarm_data = np.loadtxt('data/' + 'swarm 20240905.txt')
 n_s, Bx_s, By_s, Bz_s, x_f, y_f, z_f, vx_f, vy_f, vz_f = swarm_data.T
 Br = np.column_stack((Bx_s, By_s, Bz_s))
-# detaB_model = np.load('detaB_model_0825.npy', allow_pickle=True)
+# detaB_model = np.loadtxt('data/' + 'detaB_model.txt', delimiter=',', dtype=np.float64).T
+
+model_path = 'E:/ai_software/LSTM_Swarm/LSTM_Swarm_predPos/model/predPosTrain20240825_20240831_7.pkl'
 
 # 仿真的初始值和条件
-len_sim = 19999
+len_sim = 57999
 X = np.zeros((6, len_sim+1))  # 系统状态量
 P = np.zeros((6, 6, len_sim+1))  # 估计均方误差阵
 Pt = np.zeros((6, 6))  # 一步预测均方误差阵
@@ -44,17 +62,32 @@ Q = np.diag([1e-6 ** 2] * 6)
 R = np.diag([20 ** 2] * 3)
 detaB = np.zeros((3, len_sim))
 Rd = np.zeros(len_sim)
+detaB_2 = np.zeros(len_sim)
 detaR = np.zeros((3, len_sim))
 Vd = np.zeros(len_sim)
 detaV = np.zeros((3, len_sim))
+detaB_model = np.array([0,0,0])
+detaB_model_seq = np.zeros((len_sim+1, 3))
+detaB_model_seq[0,:] = detaB_model
+B_wmm = np.zeros((len_sim+1, 3))
+Bx, By, Bz, H_m, D_m, I_m, F_m = ecf2sphere_mag(X[0, 0], X[1, 0], X[2, 0], 12, g, h)
+B_wmm[0,:] = [Bx, By, Bz]
+JDtime = np.zeros(len_sim)
+# m = np.array([6848.64575, 6848.278586, 6826.249344, 32780.2716, 12313.3102, 48739.0162, 32854.00103, 12222.92653, 48726.94414, 6845.208253, 6845.220864, 6825.495695, 572.2563781, 3192.003036, 226.2260618])
+# n = np.array([-6848.846862, -6846.401115, -6846.957215, -11573.6838, -12775.5389, -52494.6381, -11503.10242, -12775.24134, -52479.77697, -6843.566714, -6844.326181, -6844.151817, -22364.90198, -1075.734999, -25131.76197])
 
-# 导入ONNX模型
-# model = ort.InferenceSession('model.onnx')
-
+m = np.array([6835.427252,   6781.312654 ,  6829.351228 , 32699.3376, 12328.7433  ,  48617.3694  ,  32773.88052   ,12213.36506  , 48563.0042,  6829.928918 ,  6774.021365  , 6827.990067  ,  698.5235691 ,  965.0445525,   204.3129807])
+n = np.array([-6820.66282   , -6849.905062 ,  -6846.727315, -11661.8053  ,  -12786.2691  ,  -52088.668   ,  -11499.04219, -12724.30192 ,  -52114.23552 ,   -6819.190517  , -6846.877078,  -6845.542857  , -1151.306063  ,  -558.1916223   ,-229.62014  ])
 # 卡尔曼滤波算法
 for i in range(len_sim):
+    JDtime[i] = JD2000_(year,month,day,i)
+    DAY_decimal=(JDtime[i]-DAY_t0)/365
+    for ii in range(len(n)):
+        g[int(wmm_n[ii]) - 1, int(wmm_m[ii])] = gvali[ii] + gsvi[ii] * DAY_decimal
+        h[int(wmm_n[ii]) - 1, int(wmm_m[ii])] = hvali[ii] + hsvi[ii] * DAY_decimal
     # 状态一步预测
-    solver = ode(orbit_dynamics_j2).set_integrator('dopri5', atol=1e-8, rtol=1e-8)
+    # solver = ode(orbit_dynamics_j2).set_integrator('dopri5', atol=1e-8, rtol=1e-8)
+    solver = ode(orbit_dynamics_j2).set_integrator('dop853', atol=1e-6, rtol=1e-6)
     solver.set_initial_value(X[:, i], i).integrate(i + 1)
     xe = solver.y
     Re = np.linalg.norm(xe[:3])
@@ -63,14 +96,27 @@ for i in range(len_sim):
     lamda_center = np.arctan2(xe[1], xe[0])  # 地心经度
     sita_center = np.arcsin(xe[2] / Re)  # 地心纬度
     Bx, By, Bz, H_m, D_m, I_m, F_m = ecf2sphere_mag(xe[0], xe[1], xe[2], 12, g, h)  # WMM模型阶数12
-
+    B_wmm[i+1,:] = [Bx, By, Bz]
     # if i >= 60:
-    #     model_path = 'E:/ai_software/LSTM_Swarm/LSTM_Swarm_predPos/model/predPostrain20240825.pkl'
-    #     traindata1 = X[:3, i - 60 + 1:i].T
-    #     traindata2 = Br[i - 60 + 1:i, :]
+    #     traindata1 = X[:3, i - 60:i].T
+    #     traindata2 = Br[i - 60:i, :]
+    #     traindata3 = B_wmm[i - 60:i, :]
+    #     # traindata = np.hstack((traindata1, traindata2, traindata3))
     #     traindata = np.hstack((traindata1, traindata2))
-    tempdetaB = Br[i + 1, :] - np.array([Bx, By, Bz])
-    detaB[:, i] = Br[i + 1, :] - np.array([Bx, By, Bz])
+    #     # traindata = traindata.reshape(1, 60, 9)
+    #     traindata = traindata.reshape(1, 60, 6)
+    #     traindata = (traindata - n[0:6]) / (m[0:6] - n[0:6])
+    #     traindata = torch.FloatTensor(traindata)
+    #     detaB_model = predPosB2error(traindata, model_path, m, n)
+
+    # tempBr = Br[i + 1, :]
+    # tempBs = np.array([Bx, By, Bz])
+    detaB_model_seq[i+1,:] = detaB_model
+    detaB_model = label[i+1,:]
+    tempdetaB = Br[i + 1, :] - np.array([Bx, By, Bz]) - detaB_model
+    detaB[:, i] = Br[i + 1, :] - np.array([Bx, By, Bz]) - detaB_model
+    # detaB[:, i] = Br[i + 1, :] - np.array([Bx, By, Bz]) - detaB_model[i + 1,:]
+    detaB_2[i] = np.sqrt(detaB[0,i] ** 2 + detaB[1,i] ** 2 + detaB[2,i] ** 2)
 
     # 计算雅克比矩阵F
     F41 = -miu / Re ** 3 + Wez ** 2 + 3 * miu * xe[0] ** 2 / Re ** 5 - 0.5 * (3 * miu * J2 * R_p ** 2) * (
@@ -170,5 +216,24 @@ plt.figure()  # 创建图形窗口
 plt.plot(range(0, len_sim), Rd, 'k')  # 绘制 Rd[0, :] 的数据
 plt.xlabel('time/s')  # 设置x轴标签
 plt.ylabel('Pos Error/km')  # 设置y轴标签
+
+plt.figure()  # 创建图形窗口
+plt.plot(range(0, len_sim), detaB_2, 'b')  # 绘制 Rd[0, :] 的数据
+plt.xlabel('time/s')  # 设置x轴标签
+plt.ylabel('B Error/km')  # 设置y轴标签
+
+# 创建子图：每列数据一个图
+fig, axes = plt.subplots(3, 1, figsize=(10, 15))
+# 每个子图的标题
+titles = ['B_N', 'B_E', 'B_C']
+for i in range(3):
+    axes[i].plot(label[:len_sim, i], label='label', color='blue')
+    axes[i].plot(detaB_model_seq[:, i], label='predict', color='orange')
+    # axes[i].plot(dte_wl[:, i], label='wmm2020', color='yellow')
+    axes[i].set_title(titles[i])
+    axes[i].set_xlabel('time')
+    axes[i].set_ylabel('nT')
+    axes[i].legend()
+
 plt.grid(True)  # 打开网格
 plt.show()  # 显示图形
